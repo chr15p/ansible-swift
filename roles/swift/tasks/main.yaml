@@ -1,7 +1,7 @@
 ---
   - block:
     - name: create rings
-      command: swift-ring-builder {{item}}.builder create 10 3 1
+      command: swift-ring-builder /etc/swift/{{item}}.builder create 10 3 1
       args:
         chdir: /etc/swift
       with_items:
@@ -10,14 +10,14 @@
         - object
   
     - name: add disks to rings
-      command: swift-ring-builder {{item[1]}}.builder add --region 1 --zone 1 --ip {{ hostvars[item[2]].ansible_ssh_host }} -port 6202 --device {{item[0]}} --weight 100
+      command: swift-ring-builder /etc/swift/{{item[1]}}.builder add --region 1 --zone 1 --ip {{ hostvars[item[2]].ansible_ssh_host }} --port 6202 --device {{item[0]}} --weight 100
       with_nested:
         - ['sdb','sdc'] 
         - ['account', 'container', 'object']
         - "{{ groups['storage'] }}"
   
     - name: rebalance rings
-      command: swift-ring-builder {{item}}.builder rebalance
+      command: swift-ring-builder /etc/swift/{{item}}.builder rebalance
       with_items:
         - account
         - container
