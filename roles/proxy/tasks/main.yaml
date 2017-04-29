@@ -1,0 +1,23 @@
+---
+  - name: setup RDO repo
+    yum:
+      name: https://www.rdoproject.org/repos/rdo-release.rpm
+      state: present
+
+  - name: install openstack
+    yum:
+      name: "{{ item }}"
+      state: latest
+    with_items:
+      - openstack-swift-proxy
+      - python-swiftclient
+      - python-keystoneclient
+      - python-keystonemiddleware
+      - memcached
+
+  - template:
+      src: proxy-server.conf
+      dest: /etc/swift/proxy-server.conf
+      owner: root
+      group: swift
+      mode: 0640

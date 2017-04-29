@@ -1,0 +1,152 @@
+---
+    #- name: enable rhui-REGION-rhel-server-optional
+    #  command: yum-config-manager --enable rhui-REGION-rhel-server-optional
+
+    - name: install openstack
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - openstack-utils 
+        - python-openstackclient
+        - openstack-keystone 
+        - httpd
+        - mod_wsgi 
+        - mysql-server
+        - policycoreutils-python
+#        - python-mysqldb 
+
+    - name: enable mariadb
+      systemd:
+        name: mariadb
+        state: started
+        enabled: True
+
+    - name: Create keystone database
+      mysql_db:
+        name: keystone
+        state: present
+
+    - name: keystone {{ ansible_fqdn }}
+      mysql_user:
+        name: keystone
+        password: "{{ dbpasswd }}"
+        priv: 'keystone.*:ALL'
+        state: present
+
+    - mysql_user:
+        name: keystone
+        password: "{{ dbpasswd }}"
+        priv: 'keystone.*:ALL'
+        host: localhost
+        state: present
+
+    - mysql_user:
+        name: keystone
+        password: "{{ dbpasswd }}"
+        priv: 'keystone.*:ALL'
+        host: "{{ ansible_fqdn }}" 
+        state: present
+
+
+    - name: keystone.conf connection
+      ini_file:
+        dest: /etc/keystone/keystone.conf
+        section: database
+        option: connection
+        value: mysql+pymysql://keystone:{{ dbpasswd }}@{{ ansible_fqdn }}/keystone
+        backup: yes
+
+    - name: keystone.conf fernet provider
+      ini_file:
+        dest: /etc/keystone/keystone.conf
+        section: token
+        option: provider
+        value: fernet
+        backup: yes
+
+    - name: test setup
+      shell:  "openstack endpoint list -f value 2>&1 | grep -c swift"
+      register: already_setup
+
+    - name: sync database
+      become: keystone
+      command: /bin/sh -c "keystone-manage db_sync"
+      when: already_setup.stdout != "3"
+
+    - name: fernet_setup
+      command: keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+
+    - name: credential_setup
+      command: keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+
+    - name: bootstrap
+      command: keystone-manage bootstrap --bootstrap-password "{{ adminpasswd }}" --bootstrap-admin-url http://{{ ansible_fqdn }}:35357/v3/ --bootstrap-internal-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-public-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-region-id RegionOne
+
+    - name: set apache servername
+      command: sed -i 's/#ServerName=.*/ServerName={{ ansible_fqdn }}/g' /etc/httpd/conf/httpd.conf
+
+    - name: symlink wsgi-keystone
+      file:
+        src: /usr/share/keystone/wsgi-keystone.conf
+        dest: /etc/httpd/conf.d/wsgi-keystone.conf
+        state: link
+
+    - name: allow keystone to listen on port 5000
+      seport:
+        ports: 5000
+        proto: tcp
+        setype: http_port_t
+        state: present
+
+    - seboolean:
+        name: httpd_can_network_connect
+        state: yes
+        persistent: yes
+
+    - seboolean:
+        name: httpd_use_openstack
+        state: yes
+        persistent: yes
+
+    - name: enable httpd
+      systemd:
+        name: httpd
+        state: started
+        enabled: True
+
+    #- blockinfile:
+    #    dest: /root/keystonerc
+    #    create: true
+    #    block: |
+    #      export OS_USERNAME=admin
+    #      export OS_PASSWORD={{adminpasswd}}
+    #      export OS_PROJECT_NAME=admin
+    #      export OS_USER_DOMAIN_NAME=Default
+    #      export OS_PROJECT_DOMAIN_NAME=Default
+    #      export OS_AUTH_URL=http://{{ ansible_fqdn }}:35357/v3
+    #      export OS_IDENTITY_API_VERSION=3
+
+    - debug: 
+        msg: "{{already_setup.stdout}}"
+
+    - debug: 
+        msg: "{{already_setup.stdout != '3' }}"
+
+    - name: setup projects
+      shell: |
+        command source /root/keystonerc
+        openstack project create --domain default --description "Service Project" service
+        openstack project create --domain default --description "Swift Project" demo
+        openstack user create --domain default --password {{swiftpasswd}} {{swiftuser}}
+        openstack role add --project service --user {{swiftuser}} admin
+        openstack service create --name swift --description "OpenStack Object Storage" object-store
+        openstack endpoint create --region RegionOne object-store public http://{{ ansible_fqdn }}:8080/v1/AUTH_%\(tenant_id\)s
+        openstack endpoint create --region RegionOne object-store internal http://{{ ansible_fqdn }}:8080/v1/AUTH_%\(tenant_id\)s
+        openstack endpoint create --region RegionOne object-store admin http://{{ ansible_fqdn }}:8080/v1
+      when: already_setup.stdout == "3"
+
+
+
+
+

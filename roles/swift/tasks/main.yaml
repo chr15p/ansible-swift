@@ -1,0 +1,85 @@
+---
+  - block:
+    - name: create rings
+      command: swift-ring-builder {{item}}.builder create 10 3 1
+      args:
+        chdir: /etc/swift
+      with_items:
+        - account
+        - container
+        - object
+  
+    - name: add disks to rings
+      command: swift-ring-builder {{item[1]}}.builder add --region 1 --zone 1 --ip {{ hostvars[item[2]].ansible_ssh_host }} -port 6202 --device {{item[0]}} --weight 100
+      with_nested:
+        - ['sdb','sdc'] 
+        - ['account', 'container', 'object']
+        - "{{ groups['storage'] }}"
+  
+    - name: rebalance rings
+      command: swift-ring-builder {{item}}.builder rebalance
+      with_items:
+        - account
+        - container
+        - object
+  
+    - synchronize:
+        src: /etc/swift/{{ item[0] }}.ring.gz
+        dest: rsync://{{ item[1] }}/etc/swift/
+        archive: no
+        recursive: no
+      with_nested:
+        - ['account', 'container', 'object']
+        - "{{ groups['openstack'] }}"
+    when: "'proxy' in group_names"
+    run_once: true
+    
+
+  - name: mkdir /etc/swift
+    file:
+      path: /etc/swift
+      state: directory
+      owner: root
+      group: swift
+      mode: 0755
+
+
+  - name: setup /etc/swift/swift.conf
+    template:
+      src: swift.conf
+      dest: /etc/swift/swift.conf
+      owner: root
+      group: swift
+      mode: 0640
+
+  - name: enable services
+    when: "'proxy' in group_names"
+    systemd:
+      name: "{{item}}"
+      state: restarted
+      enabled: True
+    with_items:
+      - openstack-swift-proxy.service 
+      - memcached.service
+
+
+  - name: enable services
+    when: "'storage' in group_names"
+    systemd:
+      name: "{{item}}"
+      state: restarted
+      enabled: True
+    with_items:
+      - openstack-swift-account.service 
+      - openstack-swift-account-auditor.service 
+      - openstack-swift-account-reaper.service 
+      - openstack-swift-account-replicator.service
+      - openstack-swift-container.service
+      - openstack-swift-container-auditor.service 
+      - openstack-swift-container-replicator.service
+      - openstack-swift-container-updater.service
+      - openstack-swift-object.service 
+      - openstack-swift-object-auditor.service
+      - openstack-swift-object-replicator.service
+      - openstack-swift-object-updater.service
+

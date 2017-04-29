@@ -1,0 +1,24 @@
+---
+- hosts: keystone
+  remote_user: root
+  roles:
+    - common
+    - keystone
+
+- hosts: proxy
+  remote_user: root
+  roles:
+    - common
+    - proxy
+
+- hosts: storage
+  remote_user: root
+  roles:
+    - common
+    - storage
+
+- hosts: openstack
+  remote_user: root
+  roles:
+    - swift
+ 

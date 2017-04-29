@@ -1,0 +1,116 @@
+---
+  - name: install filesystem tools
+    yum:
+      name: "{{item}}"
+      state: latest
+    with_items:
+      - xfsprogs 
+      - rsync
+
+  - group:
+      name: swift
+      state: present
+
+  - user:
+      name: swift
+      group: swift
+
+  - name: get disks
+    shell: for i in $(ls /dev/[vs]d* | grep -v da); do if [ ! "$(grep $i /etc/fstab)" ]; then echo ${i:5}; fi ; done
+    register: disks
+
+  - name: mkfs
+    command: mkfs.xfs -f /dev/{{item}}
+    with_items:
+      - "{{ disks.stdout_lines }}"
+      
+  - name: mkdir /srv/node
+    command: mkdir -p /srv/node/{{item}}
+    with_items:
+      - "{{ disks.stdout_lines }}"
+
+  - name: mkdir /srv/node
+    file:
+      path: /srv/node/
+      state: directory
+      owner: swift
+      group: swift
+      mode: 0755
+
+  - name: mkdir /srv/node/items
+    file:
+      path: /srv/node/{{item}}
+      state: directory
+      owner: swift
+      group: swift
+      mode: 0755
+    with_items:
+      - "{{ disks.stdout_lines }}"
+
+  - name: setup fstab 
+    lineinfile:
+      path: /etc/fstab
+      line: '/dev/{{item}} /srv/node/{{item}} xfs noatime,nodiratime,nobarrier,logbufs=8 0 2'
+    with_items:
+      - "{{ disks.stdout_lines }}"
+  
+  - name: mount  
+    command: mount /srv/node/{{item}}
+    with_items:
+      - "{{ disks.stdout_lines }}"
+
+  - template:
+      src: rsyncd.conf
+      dest: /etc/rsyncd.conf
+      owner: root
+      group: swift
+      mode: 0640
+
+
+  - name: enable rsyncd
+    systemd:
+      name: rsyncd
+      state: started
+      enabled: True
+
+  - name: install openstack
+    yum:
+      name: "{{item}}"
+      state: latest
+    with_items:
+      - openstack-swift-account 
+      - openstack-swift-container
+      - openstack-swift-object
+
+
+  - name: account-server.conf
+    template:
+      src: account-server.conf
+      dest: /etc/swift/account-server.conf
+      owner: root
+      group: swift
+      mode: 0640
+
+  - name: container-server.conf
+    template:
+      src: container-server.conf
+      dest: /etc/swift/container-server.conf
+      owner: root
+      group: swift
+      mode: 0640
+
+  - name: object-server.conf
+    template:
+      src: object-server.conf
+      dest: /etc/swift/object-server.conf
+      owner: root
+      group: swift
+      mode: 0640
+
+  - name: mkdir /var/cache/swift
+    file:
+      path: /var/cache/swift
+      state: directory
+      owner: root
+      group: swift
+      mode: 0755

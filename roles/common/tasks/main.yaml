@@ -1,0 +1,48 @@
+---
+  - name: "Build hosts file"
+    #lineinfile: dest=/etc/hosts regexp='.*{{ item }}$' line="{{ hostvars[item].ansible_default_ipv4.address }} {{item}}" state=present
+    lineinfile: dest=/etc/hosts line="{{ hostvars[item].ansible_ssh_host }} {{item}}"
+    when: hostvars[item].ansible_ssh_host is defined
+    with_inventory_hostnames:
+      - all
+
+    #with_items: " {{ groups['all'] }} ""
+
+  - name: yum clean all
+    command: yum clean all   
+
+  - name: install openstack-ocata
+    yum:
+      name: "{{ item }}"
+      state: latest
+    with_items:
+      - centos-release-openstack-ocata.noarch
+
+  - blockinfile:
+      dest: /root/keystonerc
+      create: true
+      mode: 0700
+      block: |
+        export OS_USERNAME=admin
+        export OS_PASSWORD={{ adminpasswd }}
+        export OS_PROJECT_NAME=admin
+        export OS_USER_DOMAIN_NAME=Default
+        export OS_PROJECT_DOMAIN_NAME=Default
+        export OS_AUTH_URL=http://{{ hostvars[item].ansible_fqdn }}:35357/v3
+        export OS_IDENTITY_API_VERSION=3
+    with_items: "{{ groups['keystone'] }}"
+
+  - blockinfile:
+      dest: /root/.bashrc
+      create: true
+      mode: 0644
+      block: |
+        export OS_USERNAME=admin
+        export OS_PASSWORD={{ adminpasswd }}
+        export OS_PROJECT_NAME=admin
+        export OS_USER_DOMAIN_NAME=Default
+        export OS_PROJECT_DOMAIN_NAME=Default
+        export OS_AUTH_URL=http://{{ hostvars[item].ansible_fqdn }}:35357/v3
+        export OS_IDENTITY_API_VERSION=3
+    with_items: "{{ groups['keystone'] }}"
+

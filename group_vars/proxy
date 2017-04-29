@@ -1,0 +1,4 @@
+---
+  adminpasswd: secret098
+  swiftuser: swift
+  swiftpasswd: secret098
