@@ -120,4 +120,4 @@
       state: directory
       owner: root
       group: swift
-      mode: 0755
+      mode: 0775
