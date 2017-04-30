@@ -18,6 +18,15 @@
     with_items:
       - centos-release-openstack-ocata.noarch
 
+  - name: disable firewalld
+    systemd:
+      name: "{{item}}"
+      state: stopped
+      enabled: False
+    with_items:
+      - firewalld
+
+
   - blockinfile:
       dest: /root/keystonerc
       create: true

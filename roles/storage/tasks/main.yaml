@@ -1,11 +1,13 @@
 ---
-  - name: install filesystem tools
+  - name: install tools
     yum:
       name: "{{item}}"
       state: latest
     with_items:
       - xfsprogs 
       - rsync
+      - policycoreutils-python
+
 
   - group:
       name: swift
@@ -58,6 +60,11 @@
     command: mount /srv/node/{{item}}
     with_items:
       - "{{ disks.stdout_lines }}"
+
+  - seboolean:
+      name: rsync_full_access
+      state: yes
+      persistent: yes
 
   - template:
       src: rsyncd.conf

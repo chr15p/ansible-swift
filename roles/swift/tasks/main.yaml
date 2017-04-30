@@ -1,4 +1,21 @@
 ---
+  - name: mkdir /etc/swift
+    file:
+      path: /etc/swift
+      state: directory
+      owner: root
+      group: swift
+      mode: 0775
+
+  - name: setup /etc/swift/swift.conf
+    template:
+      src: swift.conf
+      dest: /etc/swift/swift.conf
+      owner: root
+      group: swift
+      mode: 0640
+
+
   - block:
     - name: create rings
       command: swift-ring-builder /etc/swift/{{item}}.builder create 10 3 1
@@ -22,35 +39,24 @@
         - account
         - container
         - object
-  
-    - synchronize:
-        src: /etc/swift/{{ item[0] }}.ring.gz
-        dest: rsync://{{ item[1] }}/etc/swift/
-        archive: no
-        recursive: no
+
+    - wait_for:
+        path: /etc/swift/{{item}}.ring.gz
+      with_items:
+        - 'account'
+        - 'container'
+        - 'object'
+
+    - name: transfer ring files to all hosts
+      command: /usr/bin/rsync --delay-updates -F --compress /etc/swift/{{item[0] }}.ring.gz rsync://{{ item[1] }}/swift
+      when: item[1] != inventory_hostname
       with_nested:
         - ['account', 'container', 'object']
         - "{{ groups['openstack'] }}"
+
     when: "'proxy' in group_names"
     run_once: true
     
-
-  - name: mkdir /etc/swift
-    file:
-      path: /etc/swift
-      state: directory
-      owner: root
-      group: swift
-      mode: 0755
-
-
-  - name: setup /etc/swift/swift.conf
-    template:
-      src: swift.conf
-      dest: /etc/swift/swift.conf
-      owner: root
-      group: swift
-      mode: 0640
 
   - name: enable services
     when: "'proxy' in group_names"
@@ -61,7 +67,6 @@
     with_items:
       - openstack-swift-proxy.service 
       - memcached.service
-
 
   - name: enable services
     when: "'storage' in group_names"
