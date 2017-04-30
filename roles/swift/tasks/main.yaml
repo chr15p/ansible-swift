@@ -29,7 +29,7 @@
     - name: add disks to rings
       command: swift-ring-builder /etc/swift/{{item[1]}}.builder add --region 1 --zone 1 --ip {{ hostvars[item[2]].ansible_ssh_host }} --port 6202 --device {{item[0]}} --weight 100
       with_nested:
-        - ['sdb','sdc'] 
+        - ['vdb','vdc'] 
         - ['account', 'container', 'object']
         - "{{ groups['storage'] }}"
   
