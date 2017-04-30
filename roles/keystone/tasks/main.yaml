@@ -141,9 +141,9 @@
         openstack user create --domain default --password {{swiftpasswd}} {{swiftuser}}
         openstack role add --project service --user {{swiftuser}} admin
         openstack service create --name swift --description "OpenStack Object Storage" object-store
-        openstack endpoint create --region RegionOne object-store public http://{{ ansible_fqdn }}:8080/v1/AUTH_%\(tenant_id\)s
-        openstack endpoint create --region RegionOne object-store internal http://{{ ansible_fqdn }}:8080/v1/AUTH_%\(tenant_id\)s
-        openstack endpoint create --region RegionOne object-store admin http://{{ ansible_fqdn }}:8080/v1
+        openstack endpoint create --region RegionOne object-store public http://{{ groups['proxy'][0] }}:8080/v1/AUTH_%\(tenant_id\)s
+        openstack endpoint create --region RegionOne object-store internal http://{{ groups['proxy'][0] }}:8080/v1/AUTH_%\(tenant_id\)s
+        openstack endpoint create --region RegionOne object-store admin http://{{ groups['proxy'][0] }}:8080/v1
       when: already_setup.stdout == "3"
 
 
